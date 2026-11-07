@@ -5,94 +5,21 @@ import z from 'zod/v3';
 import { DocReader, DocWriter } from '../../../core/doc';
 import { PermissionAccess } from '../../../core/permission';
 import { DocumentRetrievalService } from '../retrieval/document';
+import { buildOrganizeTools } from './organize-tools';
+import { WorkspaceOrganizer } from './organizer';
+import {
+  abortIfNeeded,
+  defineTool,
+  toolError,
+  toolText,
+  type WorkspaceMcpServer,
+} from './tool-kit';
 
-type McpTextContent = {
-  type: 'text';
-  text: string;
-};
-
-export type WorkspaceMcpToolResult = {
-  content: McpTextContent[];
-  isError?: boolean;
-};
-
-export type WorkspaceMcpToolDefinition = {
-  name: string;
-  title: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  execute: (
-    args: Record<string, unknown>,
-    options: { signal: AbortSignal }
-  ) => Promise<WorkspaceMcpToolResult>;
-};
-
-export type WorkspaceMcpServer = {
-  name: string;
-  version: string;
-  tools: WorkspaceMcpToolDefinition[];
-};
-
-type ToolExecutorInput<T extends z.ZodTypeAny> = {
-  name: string;
-  title: string;
-  description: string;
-  parser: T;
-  inputSchema: Record<string, unknown>;
-  execute: (
-    args: z.infer<T>,
-    options: { signal: AbortSignal }
-  ) => Promise<WorkspaceMcpToolResult>;
-};
-
-function toolText(text: string): WorkspaceMcpToolResult {
-  return {
-    content: [{ type: 'text', text }],
-  };
-}
-
-function toolError(message: string): WorkspaceMcpToolResult {
-  return {
-    isError: true,
-    content: [{ type: 'text', text: message }],
-  };
-}
-
-function toInputError(error: z.ZodError) {
-  const details = error.issues
-    .map(issue => {
-      const path = issue.path.join('.');
-      return path ? `${path}: ${issue.message}` : issue.message;
-    })
-    .join('; ');
-  return toolError(`Invalid arguments: ${details || 'Invalid input'}`);
-}
-
-function abortIfNeeded(
-  signal: AbortSignal
-): WorkspaceMcpToolResult | undefined {
-  if (signal.aborted) return toolError('Request aborted.');
-  return;
-}
-
-function defineTool<T extends z.ZodTypeAny>(
-  config: ToolExecutorInput<T>
-): WorkspaceMcpToolDefinition {
-  return {
-    name: config.name,
-    title: config.title,
-    description: config.description,
-    inputSchema: config.inputSchema,
-    execute: async (args, options) => {
-      const aborted = abortIfNeeded(options.signal);
-      if (aborted) return aborted;
-
-      const parsed = config.parser.safeParse(args ?? {});
-      if (!parsed.success) return toInputError(parsed.error);
-      return await config.execute(parsed.data, options);
-    },
-  };
-}
+export type {
+  WorkspaceMcpServer,
+  WorkspaceMcpToolDefinition,
+  WorkspaceMcpToolResult,
+} from './tool-kit';
 
 @Injectable()
 export class WorkspaceMcpProvider {
@@ -100,7 +27,8 @@ export class WorkspaceMcpProvider {
     private readonly ac: PermissionAccess,
     private readonly reader: DocReader,
     private readonly writer: DocWriter,
-    private readonly retrieval: DocumentRetrievalService
+    private readonly retrieval: DocumentRetrievalService,
+    private readonly organizer: WorkspaceOrganizer
   ) {}
 
   async for(
@@ -200,12 +128,16 @@ export class WorkspaceMcpProvider {
       },
     });
 
-    const tools = [readDocument, docSearch];
+    const organize = buildOrganizeTools({
+      ac: this.ac,
+      organizer: this.organizer,
+      userId,
+      workspaceId,
+    });
+    const tools = [readDocument, docSearch, ...organize.read];
 
-    if (
-      accessMode === McpAccessMode.READ_WRITE &&
-      (env.dev || env.namespaces.canary)
-    ) {
+    // fork: write tools are available on self-hosted stable builds too
+    if (accessMode === McpAccessMode.READ_WRITE) {
       const createDocument = defineTool({
         name: 'create_document',
         title: 'Create Document',
@@ -385,12 +317,17 @@ export class WorkspaceMcpProvider {
         },
       });
 
-      tools.push(createDocument, updateDocument, updateDocumentMeta);
+      tools.push(
+        createDocument,
+        updateDocument,
+        updateDocumentMeta,
+        ...organize.write
+      );
     }
 
     return {
       name: `AFFiNE MCP Server for Workspace ${workspaceId}`,
-      version: '1.0.1',
+      version: '1.1.0',
       tools,
     };
   }

@@ -1,0 +1,9 @@
+# Overlay a server bundle built from this fork onto the official image of the
+# same AFFiNE version. Build context: a directory containing dist/main.js and
+# dist/main.js.map (the `server-dist` artifact of build-mcp-server.yml).
+#
+#   docker build -f Dockerfile.mcp-overlay -t affine-mcp:0.27.4 <context>
+ARG BASE_IMAGE=ghcr.io/toeverything/affine@sha256:b649f5ce2384ffdf13c23bccf81d759e15973d59d0b0058af65d895a84373099
+FROM ${BASE_IMAGE}
+
+COPY dist/main.js dist/main.js.map /app/dist/

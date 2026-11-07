@@ -1,0 +1,72 @@
+name: Build MCP Server Bundle
+
+# Fork-only workflow: builds just the server bundle (dist/main.js) from this
+# branch. The bundle is overlaid onto the official image of the same version
+# (see .github/deployment/node/Dockerfile.mcp-overlay), reusing its prebuilt
+# server-native module, node_modules and frontend assets.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mcp-organize
+    paths:
+      - 'packages/backend/server/**'
+      - '.github/workflows/build-mcp-server.yml'
+      - '.github/deployment/node/Dockerfile.mcp-overlay'
+
+permissions:
+  contents: read
+
+env:
+  APP_VERSION: 0.27.4
+  # official 0.27.4 image; the native module must match the server source
+  BASE_IMAGE: ghcr.io/toeverything/affine@sha256:b649f5ce2384ffdf13c23bccf81d759e15973d59d0b0058af65d895a84373099
+
+jobs:
+  build-server:
+    name: Build Server Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Version
+        uses: ./.github/actions/setup-version
+        with:
+          app-version: ${{ env.APP_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          electron-install: false
+          extra-flags: workspaces focus @affine/server @types/affine__env
+
+      - name: Extract server-native from base image
+        run: |
+          docker pull "$BASE_IMAGE"
+          cid=$(docker create "$BASE_IMAGE")
+          docker cp "$cid:/app/dist/server-native.x64.node" ./packages/backend/native/server-native.x64.node
+          docker rm "$cid"
+          # the bundler resolves every arch branch of native/index.js; only x64 is used at runtime
+          cp ./packages/backend/native/server-native.x64.node ./packages/backend/native/server-native.arm64.node
+          cp ./packages/backend/native/server-native.x64.node ./packages/backend/native/server-native.armv7.node
+          ls -alh ./packages/backend/native/*.node
+
+      - name: Build Server
+        run: yarn workspace @affine/server build
+
+      - name: Verify bundle
+        run: |
+          ls -alh ./packages/backend/server/dist
+          grep -q "list_folders" ./packages/backend/server/dist/main.js
+          grep -q '"0.27.4"' ./packages/backend/server/package.json
+
+      - name: Upload server bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: |
+            ./packages/backend/server/dist/main.js
+            ./packages/backend/server/dist/main.js.map
+          if-no-files-found: error
+          retention-days: 30

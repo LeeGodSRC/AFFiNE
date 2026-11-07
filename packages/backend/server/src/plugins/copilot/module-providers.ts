@@ -16,6 +16,7 @@ import {
   NativeEmbeddingService,
 } from './embedding';
 import { CopilotEmbeddingRealtimeProvider } from './embedding/realtime';
+import { WorkspaceOrganizer } from './mcp/organizer';
 import { WorkspaceMcpProvider } from './mcp/provider';
 import { PromptService } from './prompt';
 import { CopilotResolver, UserCopilotResolver } from './resolver';
@@ -116,7 +117,10 @@ export const COPILOT_RESOLVER_PROVIDERS = [
 
 export const COPILOT_JOB_PROVIDERS = [CopilotCronJobs];
 
-export const COPILOT_MCP_PROVIDERS = [WorkspaceMcpProvider];
+export const COPILOT_MCP_PROVIDERS = [
+  WorkspaceOrganizer,
+  WorkspaceMcpProvider,
+];
 
 export const COPILOT_KERNEL_PROVIDERS = [
   ...COPILOT_PROVIDER_PROVIDERS,
