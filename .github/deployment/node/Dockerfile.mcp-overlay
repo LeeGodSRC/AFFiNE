@@ -6,4 +6,14 @@
 ARG BASE_IMAGE=ghcr.io/toeverything/affine@sha256:b649f5ce2384ffdf13c23bccf81d759e15973d59d0b0058af65d895a84373099
 FROM ${BASE_IMAGE}
 
+# Extra runtime modules used by fork features, kept outside /app/node_modules
+# (loaded lazily via AFFINE_EXTRA_MODULES):
+# - sharp: opaque PNG uploads are stored as JPEG
+ENV AFFINE_EXTRA_MODULES=/opt/affine-extra
+RUN mkdir -p /opt/affine-extra && cd /opt/affine-extra && \
+  printf '{"name":"affine-extra","private":true}\n' > package.json && \
+  npm install --omit=dev --no-audit --no-fund sharp@0.33.5 && \
+  node -e "require('sharp')" && \
+  npm cache clean --force
+
 COPY dist/main.js dist/main.js.map /app/dist/

@@ -33,6 +33,7 @@ import {
   MULTIPART_THRESHOLD,
 } from '../../storage/constants';
 import { WorkspaceType } from '../types';
+import { convertOpaquePngToJpeg } from './png-to-jpeg';
 
 enum BlobUploadMethod {
   GRAPHQL = 'GRAPHQL',
@@ -192,7 +193,10 @@ export class WorkspaceBlobResolver {
 
     const buffer = await readBuffer(blob.createReadStream(), checkExceeded);
 
-    await this.storage.put(workspaceId, blob.filename, buffer);
+    // fork: opaque PNGs are stored as JPEG (same blob key)
+    const { buffer: stored } = await convertOpaquePngToJpeg(buffer);
+
+    await this.storage.put(workspaceId, blob.filename, stored);
     return blob.filename;
   }
 
