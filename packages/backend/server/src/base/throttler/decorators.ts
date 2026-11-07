@@ -6,7 +6,7 @@ import {
 
 import { ThrottlerType } from './config';
 
-export type Throttlers = 'default' | 'strict' | 'authenticated';
+export type Throttlers = 'default' | 'strict' | 'mcp' | 'authenticated';
 export const THROTTLER_PROTECTED = 'affine_throttler:protected';
 
 /**
@@ -17,6 +17,7 @@ export const THROTTLER_PROTECTED = 'affine_throttler:protected';
  *
  * - default: 120 calls within 60 seconds
  * - strict: 20 calls within 60 seconds
+ * - mcp: 1200 calls within 60 seconds (workspace MCP endpoint, fork)
  * - authenticated: no rate limit for authenticated users, apply [default] throttler for unauthenticated users
  *
  * @example
@@ -45,6 +46,7 @@ export function SkipThrottle(
   skip: Partial<Record<ThrottlerType, boolean>> = {
     default: true,
     strict: true,
+    mcp: true,
   }
 ): MethodDecorator & ClassDecorator {
   return RawSkipThrottle(skip);

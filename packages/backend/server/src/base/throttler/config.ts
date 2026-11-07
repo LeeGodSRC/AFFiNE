@@ -1,6 +1,6 @@
 import { defineModuleConfig } from '../config';
 
-export type ThrottlerType = 'default' | 'strict';
+export type ThrottlerType = 'default' | 'strict' | 'mcp';
 
 declare global {
   interface AppConfigSchema {
@@ -33,6 +33,15 @@ defineModuleConfig('throttle', {
     default: {
       ttl: 60_000,
       limit: 20,
+    },
+  },
+  // fork: AI agents call MCP tools in quick succession, give them their own
+  // (per client IP) budget instead of sharing the default 120/min one
+  'throttlers.mcp': {
+    desc: 'The config for the workspace MCP endpoint throttler.',
+    default: {
+      ttl: 60_000,
+      limit: 1200,
     },
   },
 });

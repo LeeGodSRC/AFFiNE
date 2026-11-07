@@ -65,7 +65,7 @@ export class WorkspaceMcpController {
     return this.errorResponse(null, -32000, 'Method not allowed.');
   }
 
-  @Throttle('default')
+  @Throttle('mcp')
   @Public()
   @Post('/')
   async mcp(
